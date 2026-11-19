@@ -1,0 +1,17 @@
+packages:
+  - db
+  - main
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true
+peerDependencyRules:
+  # eslint-config-next 16.4 pulls in these plugins, whose peer ranges stop at
+  # ESLint 9 (now EOL). Verified their rules load and fire under ESLint 10;
+  # drop these entries once the plugins declare v10 support.
+  allowedVersions:
+    eslint-plugin-import>eslint: '10'
+    eslint-plugin-jsx-a11y>eslint: '10'
+    eslint-plugin-react>eslint: '10'

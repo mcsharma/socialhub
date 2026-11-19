@@ -1,0 +1,7 @@
+{
+  // Use the workspace's pinned TypeScript (web/node_modules) rather than the
+  // one bundled with VS Code, so editor errors match `pnpm run typecheck`.
+  "typescript.tsdk": "web/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "eslint.workingDirectories": ["web"]
+}

@@ -1,0 +1,110 @@
+// web/db/prisma/schema.prisma
+//
+// Conventions
+// - Model fields are camelCase; columns are snake_case via @map; tables are
+//   plural snake_case via @@map.
+// - Every primary key is a Snowflake ID minted by the Postgres function
+//   `next_id()` (created in the first migration — see the "IDs" section of
+//   the root README for the bit layout and generator-ID ranges).
+//   - Domain tables store it as BIGINT (`BigInt` in Prisma / JS).
+//   - Better Auth's tables (users/sessions/accounts/verifications) store the
+//     same value as TEXT, because Better Auth JSON-serializes these rows and
+//     JS BigInt isn't JSON-serializable. Same ID shape everywhere, only the
+//     column type differs. Better Auth is configured with
+//     `generateId: false`, so it leaves IDs to these column defaults.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/__generated__/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Better Auth core tables ──────────────────────────────────────────────
+// Field names must match what Better Auth expects (it talks to Prisma by
+// model/field name); column/table names are free to follow our conventions.
+
+model User {
+  id            String    @id @default(dbgenerated("(next_id())::text"))
+  name          String
+  email         String    @unique
+  emailVerified Boolean   @default(false) @map("email_verified")
+  image         String?
+  // Additional field (declared in main's Better Auth config); derived from
+  // the email on sign-up by a databaseHook, used in /u/[username] URLs.
+  username      String    @unique
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  sessions Session[]
+  accounts Account[]
+  posts    Post[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(dbgenerated("(next_id())::text"))
+  expiresAt DateTime @map("expires_at")
+  token     String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(dbgenerated("(next_id())::text"))
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  userId                String    @map("user_id")
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  idToken               String?   @map("id_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at")
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(dbgenerated("(next_id())::text"))
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ─── Domain tables ────────────────────────────────────────────────────────
+
+model Post {
+  // Snowflake IDs are time-ordered, so `ORDER BY id DESC` is newest-first
+  // and `WHERE id < :cursor` is keyset pagination — no created_at index
+  // needed for the feed.
+  id        BigInt   @id @default(dbgenerated("next_id()"))
+  authorId  String   @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([authorId, id(sort: Desc)])
+  @@map("posts")
+}

@@ -1,0 +1,20 @@
+# Local dev Postgres — `docker compose up -d` from the repo root, then
+# web/.env.example's default DATABASE_URL points at this exact instance, so a
+# fresh clone needs no editing to get a working DB.
+#
+# Host port is 5433 (not the default 5432) so this can run side by side with
+# other projects' local Postgres containers (e.g. web-monorepo-scaffolding).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: socialhub
+    ports:
+      - '5433:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
