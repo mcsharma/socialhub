@@ -24,7 +24,13 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrains.variable}`}
+      // globals.css sets smooth scrolling; this tells Next to switch it off
+      // during route transitions so navigation jumps straight to the top.
+      data-scroll-behavior="smooth"
+    >
       <body>
         <SWRProvider>
           <NavBarFrame>
