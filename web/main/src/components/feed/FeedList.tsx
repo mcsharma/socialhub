@@ -17,11 +17,12 @@ import { getFeedKey } from './feed-key'
  *    mutate() after a new post.
  */
 export function FeedList({ initialPage }: { initialPage: PostPageDTO }) {
-  const { data, error, size, setSize, isValidating } = useSWRInfinite<PostPageDTO>(getFeedKey, {
-    fallbackData: [initialPage],
-    revalidateOnMount: false,
-    revalidateFirstPage: false,
-  })
+  const { data, error, size, setSize, isValidating } =
+    useSWRInfinite<PostPageDTO>(getFeedKey, {
+      fallbackData: [initialPage],
+      revalidateOnMount: false,
+      revalidateFirstPage: false,
+    })
 
   const pages = data ?? [initialPage]
   const posts = pages.flatMap((page) => page.posts)
@@ -33,8 +34,14 @@ export function FeedList({ initialPage }: { initialPage: PostPageDTO }) {
       {posts.map((post) => (
         <PostCard key={post.id} post={post} />
       ))}
-      {posts.length === 0 && <p className="py-8 text-center text-muted-foreground">No posts yet.</p>}
-      {error && <p className="text-sm text-destructive">Couldn’t load posts. {String(error.message)}</p>}
+      {posts.length === 0 && (
+        <p className="py-8 text-center text-muted-foreground">No posts yet.</p>
+      )}
+      {error && (
+        <p className="text-sm text-destructive">
+          Couldn&apos;t load posts. {String(error.message)}
+        </p>
+      )}
       {hasMore && (
         <Button
           variant="outline"

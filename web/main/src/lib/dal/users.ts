@@ -3,7 +3,10 @@ import { cacheLife, cacheTag } from 'next/cache'
 import { countPostsByAuthor, findUserByUsername } from '@socialhub/db'
 import type { UserSummaryDTO } from './dto'
 
-export type ProfileDTO = UserSummaryDTO & { joinedAt: string; postCount: number }
+export type ProfileDTO = UserSummaryDTO & {
+  joinedAt: string
+  postCount: number
+}
 
 export const profileTag = (username: string) => `profile:${username}`
 

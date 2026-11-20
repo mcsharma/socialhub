@@ -23,7 +23,11 @@ export function NavBarFrame({ children }: { children: React.ReactNode }) {
 export async function NavBarViewer() {
   const viewer = await getViewer()
   if (!viewer) {
-    return <Button render={<Link href="/login" />} nativeButton={false}>Log in</Button>
+    return (
+      <Button render={<Link href="/login" />} nativeButton={false}>
+        Log in
+      </Button>
+    )
   }
   return (
     <>

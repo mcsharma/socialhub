@@ -10,7 +10,11 @@ import { profileTag } from '@/lib/dal/users'
 // re-authenticate and re-validate here, never trust the calling component.
 
 const CreatePostInput = z.object({
-  body: z.string().trim().min(1, 'Write something first.').max(5000, 'Keep it under 5000 characters.'),
+  body: z
+    .string()
+    .trim()
+    .min(1, 'Write something first.')
+    .max(5000, 'Keep it under 5000 characters.'),
 })
 
 export type CreatePostState = { ok: true } | { ok: false; error: string } | null
@@ -23,7 +27,8 @@ export async function createPostAction(
   if (!viewer) return { ok: false, error: 'Sign in to post.' }
 
   const parsed = CreatePostInput.safeParse({ body: formData.get('body') })
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]!.message }
+  if (!parsed.success)
+    return { ok: false, error: parsed.error.issues[0]!.message }
 
   await createPost({ authorId: viewer.id, body: parsed.data.body })
 

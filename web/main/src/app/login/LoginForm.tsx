@@ -23,7 +23,11 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
     const { error } =
       mode === 'sign-in'
         ? await authClient.signIn.email({ email, password })
-        : await authClient.signUp.email({ email, password, name: String(formData.get('name')) })
+        : await authClient.signUp.email({
+            email,
+            password,
+            name: String(formData.get('name')),
+          })
     setIsPending(false)
     if (error) {
       setError(error.message ?? 'Something went wrong.')
@@ -35,25 +39,46 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-6 shadow-xs">
-      <h1 className="mb-1 text-xl font-bold">{mode === 'sign-in' ? 'Log in' : 'Create an account'}</h1>
+      <h1 className="mb-1 text-xl font-bold">
+        {mode === 'sign-in' ? 'Log in' : 'Create an account'}
+      </h1>
       <p className="mb-5 text-sm text-muted-foreground">
         Demo accounts: alice@example.com / password123 (also bob, carol)
       </p>
 
       <form action={onSubmit} className="flex flex-col gap-3">
-        {mode === 'sign-up' && <Input name="name" placeholder="Full name" required autoComplete="name" />}
-        <Input name="email" type="email" placeholder="Email" required autoComplete="email" />
+        {mode === 'sign-up' && (
+          <Input
+            name="name"
+            placeholder="Full name"
+            required
+            autoComplete="name"
+          />
+        )}
+        <Input
+          name="email"
+          type="email"
+          placeholder="Email"
+          required
+          autoComplete="email"
+        />
         <Input
           name="password"
           type="password"
           placeholder="Password"
           required
           minLength={8}
-          autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+          autoComplete={
+            mode === 'sign-in' ? 'current-password' : 'new-password'
+          }
         />
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" size="md" disabled={isPending}>
-          {isPending ? 'Please wait…' : mode === 'sign-in' ? 'Log in' : 'Sign up'}
+          {isPending
+            ? 'Please wait…'
+            : mode === 'sign-in'
+              ? 'Log in'
+              : 'Sign up'}
         </Button>
       </form>
 
@@ -64,7 +89,9 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
             variant="outline"
             size="md"
             className="w-full"
-            onClick={() => authClient.signIn.social({ provider: 'google', callbackURL: '/' })}
+            onClick={() =>
+              authClient.signIn.social({ provider: 'google', callbackURL: '/' })
+            }
           >
             Continue with Google
           </Button>

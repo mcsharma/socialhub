@@ -27,7 +27,12 @@ export const auth = betterAuth({
   emailAndPassword: { enabled: true },
 
   socialProviders: isGoogleEnabled
-    ? { google: { clientId: googleClientId!, clientSecret: googleClientSecret! } }
+    ? {
+        google: {
+          clientId: googleClientId!,
+          clientSecret: googleClientSecret!,
+        },
+      }
     : {},
 
   user: {

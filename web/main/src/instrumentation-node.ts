@@ -11,12 +11,17 @@ export async function assertDatabaseReachable() {
   try {
     await prisma.$queryRaw`SELECT 1`
   } catch {
-    const maskedUrl = (process.env.DATABASE_URL ?? '(not set)').replace(/:[^:@/]*@/, ':****@')
+    const maskedUrl = (process.env.DATABASE_URL ?? '(not set)').replace(
+      /:[^:@/]*@/,
+      ':****@',
+    )
     const fix =
       process.env.NODE_ENV === 'production'
         ? 'Check DATABASE_URL and that the database is reachable from this environment.'
         : "If local Postgres isn't running yet, start it from the repo root:\n\n  docker compose up -d\n\nThen restart the dev server."
-    console.error(`\nCould not connect to the database (DATABASE_URL: ${maskedUrl}).\n\n${fix}\n`)
+    console.error(
+      `\nCould not connect to the database (DATABASE_URL: ${maskedUrl}).\n\n${fix}\n`,
+    )
     process.exit(1)
   }
 }

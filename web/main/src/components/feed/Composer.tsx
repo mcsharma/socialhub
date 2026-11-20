@@ -16,17 +16,20 @@ import { getFeedKey } from './feed-key'
  */
 export function Composer({ viewer }: { viewer: UserSummaryDTO }) {
   const { mutate } = useSWRConfig()
-  const [state, formAction, isPending] = useActionState<CreatePostState, FormData>(
-    async (prev, formData) => {
-      const result = await createPostAction(prev, formData)
-      if (result?.ok) await mutate(unstable_serialize(getFeedKey))
-      return result
-    },
-    null,
-  )
+  const [state, formAction, isPending] = useActionState<
+    CreatePostState,
+    FormData
+  >(async (prev, formData) => {
+    const result = await createPostAction(prev, formData)
+    if (result?.ok) await mutate(unstable_serialize(getFeedKey))
+    return result
+  }, null)
 
   return (
-    <form action={formAction} className="rounded-lg border border-border bg-card p-4 shadow-xs">
+    <form
+      action={formAction}
+      className="rounded-lg border border-border bg-card p-4 shadow-xs"
+    >
       <div className="flex gap-3">
         <UserAvatar user={viewer} />
         <Textarea
@@ -38,7 +41,9 @@ export function Composer({ viewer }: { viewer: UserSummaryDTO }) {
         />
       </div>
       <div className="mt-3 flex items-center justify-end gap-3">
-        {state?.ok === false && <p className="mr-auto text-sm text-destructive">{state.error}</p>}
+        {state?.ok === false && (
+          <p className="mr-auto text-sm text-destructive">{state.error}</p>
+        )}
         <Button type="submit" size="md" disabled={isPending}>
           {isPending ? 'Posting…' : 'Post'}
         </Button>

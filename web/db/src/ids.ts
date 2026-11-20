@@ -25,7 +25,9 @@ export function decodeSnowflake(id: bigint | string) {
   const ms = (n >> TIMESTAMP_SHIFT) + SNOWFLAKE_EPOCH_MS
   return {
     createdAt: new Date(Number(ms)),
-    generatorId: Number((n >> SEQUENCE_BITS) & ((1n << GENERATOR_ID_BITS) - 1n)),
+    generatorId: Number(
+      (n >> SEQUENCE_BITS) & ((1n << GENERATOR_ID_BITS) - 1n),
+    ),
     sequence: Number(n & ((1n << SEQUENCE_BITS) - 1n)),
   }
 }

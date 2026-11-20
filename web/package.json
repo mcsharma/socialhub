@@ -14,7 +14,9 @@
     "db:generate": "pnpm --filter @socialhub/db generate",
     "db:seed": "pnpm --filter @socialhub/db seed",
     "db:reset": "pnpm --filter @socialhub/db reset",
-    "db:studio": "pnpm --filter @socialhub/db studio"
+    "db:studio": "pnpm --filter @socialhub/db studio",
+    "format": "prettier --write . ../.vscode ../docker-compose.yml ../.prettierrc.json",
+    "format:check": "prettier --check . ../.vscode ../docker-compose.yml ../.prettierrc.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -22,6 +24,7 @@
     "eslint": "^10.15.0",
     "eslint-config-next": "16.4.6",
     "globals": "^17.14.0",
+    "prettier": "^3.10.1",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.73.0"
   },

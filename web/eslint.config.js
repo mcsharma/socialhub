@@ -11,7 +11,9 @@ import { defineConfig, globalIgnores } from 'eslint/config'
 // Pure-ignore entries are left global, as the presets intend.
 const scopeToMain = (configs) =>
   configs.map((c) =>
-    Object.keys(c).length === 1 && c.ignores ? c : { ...c, files: ['main/**/*.{js,mjs,ts,tsx}'] },
+    Object.keys(c).length === 1 && c.ignores
+      ? c
+      : { ...c, files: ['main/**/*.{js,mjs,ts,tsx}'] },
   )
 
 export default defineConfig([
@@ -31,7 +33,10 @@ export default defineConfig([
       globals: { ...globals.node },
     },
     rules: {
-      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_' },
+      ],
     },
   },
 

@@ -5,7 +5,10 @@ import { UserAvatar } from '@/components/UserAvatar'
 // No hooks, no server-only imports → renders as a Server Component (profile
 // page) or inside a Client Component (feed list) alike.
 
-const dateFormat = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' })
+const dateFormat = new Intl.DateTimeFormat('en-US', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
 
 export function PostCard({ post }: { post: PostDTO }) {
   return (

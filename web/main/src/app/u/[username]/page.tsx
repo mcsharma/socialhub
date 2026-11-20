@@ -15,10 +15,16 @@ import { UserAvatar } from '@/components/UserAvatar'
  *  - Pure Server Components — no client JS for this page beyond the layout.
  */
 
-export async function generateMetadata({ params }: PageProps<'/u/[username]'>): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: PageProps<'/u/[username]'>): Promise<Metadata> {
   const { username } = await params
   const profile = await getProfile(username)
-  return { title: profile ? `${profile.name} (@${profile.username})` : 'Profile not found' }
+  return {
+    title: profile
+      ? `${profile.name} (@${profile.username})`
+      : 'Profile not found',
+  }
 }
 
 export default function ProfilePage({ params }: PageProps<'/u/[username]'>) {
@@ -31,9 +37,16 @@ export default function ProfilePage({ params }: PageProps<'/u/[username]'>) {
   )
 }
 
-const joinedFormat = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' })
+const joinedFormat = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  year: 'numeric',
+})
 
-async function Profile({ params }: { params: PageProps<'/u/[username]'>['params'] }) {
+async function Profile({
+  params,
+}: {
+  params: PageProps<'/u/[username]'>['params']
+}) {
   const { username } = await params
   const profile = await getProfile(username)
   if (!profile) notFound()
@@ -46,7 +59,8 @@ async function Profile({ params }: { params: PageProps<'/u/[username]'>['params'
           <h1 className="text-2xl font-bold">{profile.name}</h1>
           <p className="text-muted-foreground">@{profile.username}</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Joined {joinedFormat.format(new Date(profile.joinedAt))} · {profile.postCount} posts
+            Joined {joinedFormat.format(new Date(profile.joinedAt))} ·{' '}
+            {profile.postCount} posts
           </p>
         </div>
       </section>
@@ -63,7 +77,8 @@ async function Profile({ params }: { params: PageProps<'/u/[username]'>['params'
 
 async function RecentPosts({ authorId }: { authorId: string }) {
   const posts = await getRecentPostsByAuthor(authorId)
-  if (posts.length === 0) return <p className="text-muted-foreground">No posts yet.</p>
+  if (posts.length === 0)
+    return <p className="text-muted-foreground">No posts yet.</p>
   return posts.map((post) => <PostCard key={post.id} post={post} />)
 }
 

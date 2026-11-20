@@ -31,16 +31,25 @@ const POST_BODIES = [
 
 async function main() {
   await prisma.post.deleteMany()
-  await prisma.user.deleteMany({ where: { email: { in: USERS.map((u) => u.email) } } })
+  await prisma.user.deleteMany({
+    where: { email: { in: USERS.map((u) => u.email) } },
+  })
 
   const password = await hashPassword(DEMO_PASSWORD)
   const users = []
   for (const u of USERS) {
-    const user = await prisma.user.create({ data: { ...u, emailVerified: true } })
+    const user = await prisma.user.create({
+      data: { ...u, emailVerified: true },
+    })
     // Better Auth stores email/password credentials as an Account row with
     // providerId "credential" whose accountId is the user's own ID.
     await prisma.account.create({
-      data: { userId: user.id, accountId: user.id, providerId: 'credential', password },
+      data: {
+        userId: user.id,
+        accountId: user.id,
+        providerId: 'credential',
+        password,
+      },
     })
     users.push(user)
   }
@@ -56,7 +65,9 @@ async function main() {
     })
   }
 
-  console.log(`Seeded ${users.length} users and 30 posts. Password for all: ${DEMO_PASSWORD}`)
+  console.log(
+    `Seeded ${users.length} users and 30 posts. Password for all: ${DEMO_PASSWORD}`,
+  )
 }
 
 main()

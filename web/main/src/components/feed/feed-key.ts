@@ -6,7 +6,10 @@ import type { PostPageDTO } from '@/lib/dal/dto'
  * Shared by FeedList (reads) and Composer (revalidates after posting) so
  * both address the same cache entry.
  */
-export function getFeedKey(pageIndex: number, previousPage: PostPageDTO | null) {
+export function getFeedKey(
+  pageIndex: number,
+  previousPage: PostPageDTO | null,
+) {
   if (pageIndex === 0) return '/api/posts'
   if (!previousPage?.nextCursor) return null
   return `/api/posts?cursor=${previousPage.nextCursor}`

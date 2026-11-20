@@ -4,7 +4,12 @@ import { prisma } from '../client'
 // permissions, no framework imports — those belong to the caller (e.g.
 // web/main/src/lib/dal), which keeps these reusable from any TS process.
 
-const authorSelect = { id: true, name: true, username: true, image: true } as const
+const authorSelect = {
+  id: true,
+  name: true,
+  username: true,
+  image: true,
+} as const
 
 export type PostPage = Awaited<ReturnType<typeof listFeedPosts>>
 export type PostWithAuthor = PostPage['posts'][number]
@@ -50,7 +55,13 @@ export async function countPostsByAuthor(authorId: string) {
   return prisma.post.count({ where: { authorId } })
 }
 
-export async function createPost({ authorId, body }: { authorId: string; body: string }) {
+export async function createPost({
+  authorId,
+  body,
+}: {
+  authorId: string
+  body: string
+}) {
   return prisma.post.create({
     data: { authorId, body },
     include: { author: { select: authorSelect } },

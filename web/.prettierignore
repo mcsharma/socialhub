@@ -2,4 +2,8 @@
 **/__generated__/**
 **/node_modules/**
 **/.next/**
+**/next-env.d.ts
 **/prisma/migrations/**
+pnpm-lock.yaml
+# Markdown isn't formatted on save (VS Code: "[markdown]" has no default formatter)
+**/*.md
