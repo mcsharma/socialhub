@@ -5,5 +5,4 @@
 export { prisma } from './client'
 export type { Post, User } from './__generated__/prisma/client'
 export * from './ids'
-export * from './queries/posts'
 export * from './queries/users'

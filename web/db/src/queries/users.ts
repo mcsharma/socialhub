@@ -1,18 +1,5 @@
 import { prisma } from '../client'
 
-export async function findUserByUsername(username: string) {
-  return prisma.user.findUnique({
-    where: { username },
-    select: {
-      id: true,
-      name: true,
-      username: true,
-      image: true,
-      createdAt: true,
-    },
-  })
-}
-
 /**
  * Derives a unique username from an email's local part ("Jane.Doe@x.com" →
  * "janedoe", then "janedoe-2", …). Used when a user signs up, since neither
