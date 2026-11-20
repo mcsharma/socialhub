@@ -3,6 +3,14 @@
 // can reorganize internally without breaking them.
 
 export { prisma } from './client'
-export type { Post, User } from './__generated__/prisma/client'
+export type {
+  Circle,
+  Comment,
+  Media,
+  Post,
+  PostReaction,
+  User,
+} from './__generated__/prisma/client'
+export { MediaKind, ReactionType } from './__generated__/prisma/enums'
 export * from './ids'
 export * from './queries/users'

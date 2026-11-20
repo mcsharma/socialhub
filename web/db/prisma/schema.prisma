@@ -27,20 +27,26 @@ datasource db {
 // model/field name); column/table names are free to follow our conventions.
 
 model User {
-  id            String    @id @default(dbgenerated("(next_id())::text"))
+  id            String   @id @default(dbgenerated("(next_id())::text"))
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false) @map("email_verified")
+  email         String   @unique
+  emailVerified Boolean  @default(false) @map("email_verified")
   image         String?
   // Additional field (declared in main's Better Auth config); derived from
   // the email on sign-up by a databaseHook, used in /u/[username] URLs.
-  username      String    @unique
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at")
+  username      String   @unique
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
 
-  sessions Session[]
-  accounts Account[]
-  posts    Post[]
+  sessions          Session[]
+  accounts          Account[]
+  circlesCreated    Circle[]       @relation("CircleCreator")
+  circleMemberships CircleMember[] @relation("CircleMember")
+  membersAdded      CircleMember[] @relation("CircleMemberAddedBy")
+  posts             Post[]
+  media             Media[]
+  postReactions     PostReaction[]
+  comments          Comment[]
 
   @@map("users")
 }
@@ -92,19 +98,165 @@ model Verification {
   @@map("verifications")
 }
 
-// ─── Domain tables ────────────────────────────────────────────────────────
+// ─── Circles ──────────────────────────────────────────────────────────────
+// A circle is a private group; its feed is every member's posts, newest
+// first. Circles are secret: only members can see them or their posts.
+// Every member has the same permissions (no owner/admin), and any member can
+// add someone.
+//
+// Product rule (enforced in the app, NOT here): a user is in at most one
+// circle for now. The schema already allows many, so lifting the rule needs
+// no migration.
+
+model Circle {
+  id          BigInt   @id @default(dbgenerated("next_id()"))
+  name        String
+  // Null if the creator's account is deleted; creators have no special
+  // rights, so the circle lives on.
+  createdById String?  @map("created_by_id")
+  createdBy   User?    @relation("CircleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  members CircleMember[]
+  posts   Post[]
+
+  @@map("circles")
+}
+
+model CircleMember {
+  circleId  BigInt   @map("circle_id")
+  userId    String   @map("user_id")
+  // Who added this member. Null for the circle's creator, and if the adder's
+  // account is deleted.
+  addedById String?  @map("added_by_id")
+  joinedAt  DateTime @default(now()) @map("joined_at")
+  circle    Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  user      User     @relation("CircleMember", fields: [userId], references: [id], onDelete: Cascade)
+  addedBy   User?    @relation("CircleMemberAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@id([circleId, userId])
+  @@index([userId]) // "which circles is this user in?"
+  @@map("circle_members")
+}
+
+// ─── Posts ────────────────────────────────────────────────────────────────
 
 model Post {
   // Snowflake IDs are time-ordered, so `ORDER BY id DESC` is newest-first
   // and `WHERE id < :cursor` is keyset pagination — no created_at index
   // needed for the feed.
+  id            BigInt   @id @default(dbgenerated("next_id()"))
+  circleId      BigInt   @map("circle_id")
+  authorId      String   @map("author_id")
+  // Null for photo-only posts. The app requires a body or at least one photo.
+  body          String?
+  // Denormalized counts, maintained by Postgres triggers on post_reactions
+  // and comments (see the circles migration) — never written by app code.
+  reactionCount Int      @default(0) @map("reaction_count")
+  commentCount  Int      @default(0) @map("comment_count")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  circle        Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  media     PostMedia[]
+  reactions PostReaction[]
+  comments  Comment[]
+
+  @@index([circleId, id(sort: Desc)]) // circle feed
+  @@index([authorId, id(sort: Desc)]) // profile
+  @@map("posts")
+}
+
+// ─── Media ────────────────────────────────────────────────────────────────
+// Uploaded first, then attached to a post (via post_media) when the post is
+// created. Photos are processed at upload (EXIF stripped, rotated, resized to
+// fixed WebP sizes) and stored in object storage under `storageKey`, a
+// random, unguessable prefix — circles are secret, so keys must not be
+// enumerable. Videos will be added as another MediaKind.
+
+enum MediaKind {
+  PHOTO
+
+  @@map("media_kind")
+}
+
+model Media {
+  id         BigInt    @id @default(dbgenerated("next_id()"))
+  uploaderId String    @map("uploader_id")
+  kind       MediaKind
+  storageKey String    @unique @map("storage_key")
+  mimeType   String    @map("mime_type")
+  // Dimensions of the largest stored size, for layout before the image loads.
+  width      Int
+  height     Int
+  sizeBytes  Int       @map("size_bytes")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  uploader   User      @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+
+  post PostMedia?
+
+  @@index([uploaderId])
+  @@map("media")
+}
+
+model PostMedia {
+  postId   BigInt @map("post_id")
+  mediaId  BigInt @unique @map("media_id") // a media item belongs to one post
+  position Int // 0-based order within the post; the app allows up to 10
+  post     Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  media    Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([postId, mediaId])
+  @@unique([postId, position])
+  @@map("post_media")
+}
+
+// ─── Reactions ────────────────────────────────────────────────────────────
+// One table per reactable thing (post_reactions now, comment_reactions
+// later), sharing ReactionType — keeps real foreign keys and cascades, which
+// a polymorphic (target_type, target_id) table can't.
+
+enum ReactionType {
+  LIKE
+  LOVE
+  HAHA
+  SAD
+  ANGRY
+
+  @@map("reaction_type")
+}
+
+model PostReaction {
+  postId    BigInt       @map("post_id")
+  userId    String       @map("user_id")
+  type      ReactionType
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+  post      Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // One reaction per person per post; changing it updates `type`.
+  @@id([postId, userId])
+  @@index([userId])
+  @@map("post_reactions")
+}
+
+// ─── Comments ─────────────────────────────────────────────────────────────
+// Flat for now. Replies will add a nullable `parentId`.
+
+model Comment {
   id        BigInt   @id @default(dbgenerated("next_id()"))
+  postId    BigInt   @map("post_id")
   authorId  String   @map("author_id")
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   body      String
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
-  @@index([authorId, id(sort: Desc)])
-  @@map("posts")
+  @@index([postId, id]) // a post's comments, oldest first
+  @@index([authorId])
+  @@map("comments")
 }
