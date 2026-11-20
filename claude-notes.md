@@ -17,12 +17,12 @@ docker compose up -d              # 1. Postgres on localhost:5433
 cp web/.env.example web/.env      # 2. defaults work as-is for local dev
 cd web && pnpm install            # 3. also runs `prisma generate`
 pnpm run db:migrate               # 4. apply migrations
-pnpm run db:seed                  # 5. demo users + posts
+pnpm run db:seed                  # 5. demo circles, users, posts
 pnpm run dev                      # 6. http://localhost:3000
 ```
 
-Log in as `alice@example.com` / `password123` (also `bob@…`, `carol@…`), or
-create an account. Google sign-in appears once `GOOGLE_CLIENT_ID` /
+Log in as `alice@example.com` / `password123` (also `bob@…`, `carol@…` in the
+"Friends" circle; `dave@…`, `erin@…` in "Book club"), or create an account. Google sign-in appears once `GOOGLE_CLIENT_ID` /
 `GOOGLE_CLIENT_SECRET` are set in `web/.env`.
 
 ## Scripts (run from `web/`)
@@ -36,7 +36,7 @@ create an account. Google sign-in appears once `GOOGLE_CLIENT_ID` /
 | `pnpm run lint` / `lint:fix` | ESLint in every package (one shared `web/eslint.config.js`)   |
 | `pnpm run db:migrate`   | `prisma migrate dev` — create + apply a migration from schema edits |
 | `pnpm run db:generate`  | Regenerate the Prisma client                                       |
-| `pnpm run db:seed`      | Re-create demo users/posts (idempotent)                            |
+| `pnpm run db:seed`      | Re-create demo circles, users, posts, reactions, comments (idempotent) |
 | `pnpm run db:reset`     | Drop + re-apply all migrations (destructive)                       |
 | `pnpm run db:studio`    | Prisma Studio                                                      |
 
@@ -78,17 +78,15 @@ prerendered **static shell**; dynamic parts **stream** in behind
 queries the DB uncached must sit inside a `<Suspense>` boundary — `next
 build` fails loudly if it doesn't.
 
-The two demo pages show every pattern:
+Which tool to reach for:
 
-| Pattern | Where |
+| Need | Pattern |
 | --- | --- |
-| Static shell (prerendered) | Heading on `/`, nav frame in `app/layout.tsx`, all of `/login` |
-| Dynamic + streamed (`<Suspense>`) | Nav viewer + composer (session cookie), feed (`connection()` + DB) |
-| SSR → CSR hand-off | `/` renders feed page 1 on the server; `FeedList` (SWR `useSWRInfinite`, `fallbackData`) takes over for "Load more" via `GET /api/posts` |
-| Cached data (`'use cache'` + `cacheTag`/`cacheLife`) | Profile header — `lib/dal/users.ts#getProfile` |
-| Mutation + cache invalidation | `Composer` → Server Action `lib/actions/posts.ts` → `updateTag(profile)` + SWR `mutate()` |
-| Dynamic route, `notFound()`, `generateMetadata` | `app/u/[username]/` |
-| Route Handler (JSON) | `app/api/posts/route.ts` |
+| Content with no per-request data | Leave it outside `<Suspense>`: it's prerendered into the static shell (e.g. the nav frame, `/login`) |
+| Per-request data (session, params, uncached DB reads) | Render it inside `<Suspense>`; it streams in. A DB read that touches no request API needs `await connection()` |
+| Data shared by all viewers that changes rarely | `'use cache'` + `cacheTag`/`cacheLife`; invalidate with `updateTag` after a write |
+| First page on the server, more in the browser | Server-render page 1, pass it to a Client Component using SWR `useSWRInfinite` with `fallbackData`; later pages come from a Route Handler |
+| Writes from forms | Server Action + `useActionState`; then `updateTag` and/or SWR `mutate()` |
 
 Note: `notFound()` inside a streamed `<Suspense>` boundary renders the
 not-found UI with HTTP **200** (the shell's status is already sent) plus a
@@ -146,6 +144,30 @@ unique, compact in URLs (e.g. `/posts/116808394517512231`).
 | 2048–4095 | Out-of-database generators (services, workers, batch jobs) — from config (`GENERATOR_ID`) or leased from a registry at startup. |
 
 New tables: `id BigInt @id @default(dbgenerated("next_id()"))`.
+
+## Data model
+
+Tables are documented in `web/db/prisma/schema.prisma`. The main rules:
+
+- **Circles are secret.** A circle's posts are visible only to its members,
+  so every circle read and write must check membership in `web/main/src/lib/dal/`.
+  Non-members get "not found", never "forbidden", so nothing reveals that a
+  circle exists.
+- **One circle per user is a product rule, not a schema rule.** The schema
+  allows many; the app enforces one for now.
+- **All members are equal.** Any member can add someone; `added_by_id`
+  records who did.
+- **Counts are maintained by Postgres triggers.** `posts.reaction_count` and
+  `posts.comment_count` are updated by triggers on `post_reactions` and
+  `comments` (in the `circles_reactions_comments` migration). App code never
+  writes them.
+- **Photos** are processed at upload (EXIF stripped, rotated, resized to fixed
+  WebP sizes) and stored in object storage under random keys: R2 in
+  production, SeaweedFS in `docker-compose` for development (not set up yet).
+  Up to 10 per post.
+- **Extending later:** reactions on comments get their own
+  `comment_reactions` table with the same `ReactionType`; replies add a
+  nullable `parent_id` to `comments`; videos add a `MediaKind`.
 
 ## Working with the database
 
