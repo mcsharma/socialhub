@@ -31,13 +31,10 @@ export async function NavBarViewer() {
   }
   return (
     <>
-      <Link
-        href={`/u/${viewer.username}`}
-        className="flex items-center gap-2 rounded-full py-1 pr-3 pl-1 text-sm font-medium hover:bg-secondary"
-      >
+      <span className="flex items-center gap-2 py-1 pr-3 pl-1 text-sm font-medium">
         <UserAvatar user={viewer} size="sm" />
         {viewer.name.split(' ')[0]}
-      </Link>
+      </span>
       <SignOutButton />
     </>
   )
