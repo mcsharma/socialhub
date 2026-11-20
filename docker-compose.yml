@@ -1,9 +1,9 @@
-# Local dev Postgres — `docker compose up -d` from the repo root, then
-# web/.env.example's default DATABASE_URL points at this exact instance, so a
-# fresh clone needs no editing to get a working DB.
+# Local dev services — `docker compose up -d` from the repo root. The defaults
+# in web/.env.example point at these exact instances, so a fresh clone needs
+# no editing.
 #
-# Host port is 5433 (not the default 5432) so this can run side by side with
-# other projects' local Postgres containers (e.g. web-monorepo-scaffolding).
+# Postgres's host port is 5433 (not the default 5432) so this can run side by
+# side with other projects' local Postgres containers.
 services:
   postgres:
     image: postgres:16
@@ -16,5 +16,19 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  # S3-compatible object storage for photos (production uses Cloudflare R2;
+  # the app only speaks the S3 API, so the same code runs against both).
+  # S3 API on localhost:8333. Credentials are dev-only and live in
+  # seaweedfs/s3.json. The app creates its bucket on startup in development.
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.52
+    command: server -dir=/data -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - '8333:8333'
+    volumes:
+      - ./seaweedfs/s3.json:/etc/seaweedfs/s3.json:ro
+      - seaweedfs-data:/data
+
 volumes:
   pgdata:
+  seaweedfs-data:

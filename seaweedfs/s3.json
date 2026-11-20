@@ -1,0 +1,14 @@
+{
+  "identities": [
+    {
+      "name": "socialhub-dev",
+      "credentials": [
+        {
+          "accessKey": "socialhub",
+          "secretKey": "socialhub-dev-secret"
+        }
+      ],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}
