@@ -1,4 +1,5 @@
 import { prisma } from '@socialhub/db'
+import { ensureBucketExists } from '@/lib/storage'
 
 /**
  * Fail fast with an actionable message if Postgres isn't reachable — much
@@ -23,5 +24,22 @@ export async function assertDatabaseReachable() {
       `\nCould not connect to the database (DATABASE_URL: ${maskedUrl}).\n\n${fix}\n`,
     )
     process.exit(1)
+  }
+}
+
+/**
+ * Development only: make sure object storage is up and the bucket exists, so
+ * photo uploads work on a fresh `docker compose up -d`. Production buckets are
+ * provisioned ahead of time.
+ */
+export async function ensureDevStorage() {
+  if (process.env.NODE_ENV !== 'development') return
+  try {
+    await ensureBucketExists()
+  } catch (error) {
+    console.error(
+      `\nCould not reach object storage at ${process.env.S3_ENDPOINT ?? '(S3_ENDPOINT not set)'}: ${String(error)}\n\n` +
+        "Photo uploads won't work. If the local SeaweedFS container isn't running, start it from the repo root:\n\n  docker compose up -d\n",
+    )
   }
 }
