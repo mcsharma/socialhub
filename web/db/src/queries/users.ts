@@ -1,6 +1,22 @@
 import { prisma } from '../client'
 
 /**
+ * Looks a user up by username ("alice" or "@alice") or email. Emails are
+ * matched lowercased, since Better Auth stores them that way.
+ */
+export async function findUserByUsernameOrEmail(identifier: string) {
+  const value = identifier.trim()
+  const where =
+    value.includes('@') && !value.startsWith('@')
+      ? { email: value.toLowerCase() }
+      : { username: value.replace(/^@/, '').toLowerCase() }
+  return prisma.user.findUnique({
+    where,
+    select: { id: true, name: true, username: true, image: true },
+  })
+}
+
+/**
  * Derives a unique username from an email's local part ("Jane.Doe@x.com" →
  * "janedoe", then "janedoe-2", …). Used when a user signs up, since neither
  * email/password nor Google sign-up asks for a username.
