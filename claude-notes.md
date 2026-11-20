@@ -13,7 +13,7 @@ Prerequisites: Node ≥ 24, Docker, and pnpm via corepack (`packageManager` in
 `web/package.json` pins the version).
 
 ```sh
-docker compose up -d              # 1. Postgres on localhost:5433
+docker compose up -d              # 1. Postgres (localhost:5433) + SeaweedFS (localhost:8333)
 cp web/.env.example web/.env      # 2. defaults work as-is for local dev
 cd web && pnpm install            # 3. also runs `prisma generate`
 pnpm run db:migrate               # 4. apply migrations
@@ -37,7 +37,7 @@ Log in as `alice@example.com` / `password123` (also `bob@…`, `carol@…` in th
 | `pnpm run db:migrate`   | `prisma migrate dev` — create + apply a migration from schema edits |
 | `pnpm run db:generate`  | Regenerate the Prisma client                                       |
 | `pnpm run db:seed`      | Re-create demo circles, users, posts, reactions, comments (idempotent) |
-| `pnpm run db:reset`     | Drop + re-apply all migrations (destructive)                       |
+| `pnpm run db:reset`     | Drop + re-apply all migrations (destructive). Doesn't seed: run `db:seed` after |
 | `pnpm run db:studio`    | Prisma Studio                                                      |
 
 ## Architecture
@@ -161,13 +161,52 @@ Tables are documented in `web/db/prisma/schema.prisma`. The main rules:
   `posts.comment_count` are updated by triggers on `post_reactions` and
   `comments` (in the `circles_reactions_comments` migration). App code never
   writes them.
-- **Photos** are processed at upload (EXIF stripped, rotated, resized to fixed
-  WebP sizes) and stored in object storage under random keys: R2 in
-  production, SeaweedFS in `docker-compose` for development (not set up yet).
-  Up to 10 per post.
+- **Photos**: up to 10 per post. See "Photos and storage" below.
 - **Extending later:** reactions on comments get their own
   `comment_reactions` table with the same `ReactionType`; replies add a
   nullable `parent_id` to `comments`; videos add a `MediaKind`.
+
+## App structure
+
+| Route | What it is |
+| --- | --- |
+| `/` | Signed out: intro + log in. In a circle: redirects to it. Otherwise: create a circle |
+| `/c/[circleId]` | The circle's feed: composer (text + photos), posts with reactions and comments |
+| `/c/[circleId]/members` | Members list + add someone by username or email |
+| `/login` | Email/password and Google sign-in |
+| `GET /api/circles/[circleId]/posts?cursor=` | Feed pages for SWR "Load more" |
+| `GET /api/posts/[postId]/comments` | A post's comments, loaded when opened |
+| `POST /api/media` | Upload one photo (multipart `file`) |
+
+- **Writes** are Server Actions in `web/main/src/lib/actions/`: create
+  circle, add member, create post, set/remove reaction, add comment. Each
+  re-checks the session and circle membership.
+- **Reads** go through `web/main/src/lib/dal/` (`circles.ts`, `posts.ts`),
+  which check membership and return DTOs (`dto.ts`).
+- **Feed updates in the browser:** a new post revalidates the feed through
+  SWR; reactions and comments patch just that post in SWR's cache. Reactions
+  update instantly (`useOptimistic`) and are corrected by the server's answer.
+
+## Photos and storage
+
+- **Upload:** the composer uploads each photo as soon as it's picked to
+  `POST /api/media` (a Route Handler, since Server Actions cap bodies at
+  1 MB; 20 MB limit per photo). Only the returned media IDs are sent with
+  the post.
+- **Processing** (`web/main/src/lib/photos.ts`, using `sharp`): rejects
+  anything that isn't JPEG, PNG, WebP, GIF, AVIF or TIFF; rotates the photo
+  upright; drops all metadata, including GPS; stores WebP at 1080px (feed)
+  and 2048px (full) under `photos/<32 random hex chars>/`. HEIC isn't
+  decodable, but iOS converts to JPEG for web uploads.
+- **Storage** (`web/main/src/lib/storage.ts`) speaks the S3 API to a private
+  bucket: SeaweedFS from `docker-compose` locally (credentials in
+  `seaweedfs/s3.json`, dev-only), Cloudflare R2 in production (see `S3_*` in
+  `web/.env.example`). In development the app creates the bucket on startup.
+- **Viewing:** the browser gets signed URLs, valid 1–2 hours. The signing time
+  is rounded to the hour so a photo's URL stays the same within that hour and
+  browser caching works.
+- **Not done yet:** photos uploaded but never posted stay in storage; they
+  need a periodic cleanup job.
 
 ## Working with the database
 
