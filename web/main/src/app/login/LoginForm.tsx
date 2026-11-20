@@ -42,9 +42,13 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
       <h1 className="mb-1 text-xl font-bold">
         {mode === 'sign-in' ? 'Log in' : 'Create an account'}
       </h1>
-      <p className="mb-5 text-sm text-muted-foreground">
-        Demo accounts: alice@example.com / password123 (also bob, carol)
-      </p>
+      {/* Seeded accounts (web/db/prisma/seed.ts) — development builds only. */}
+      {process.env.NODE_ENV === 'development' && (
+        <p className="mb-5 text-sm text-muted-foreground">
+          Demo accounts: alice@example.com / password123 (also bob, carol, dave,
+          erin)
+        </p>
+      )}
 
       <form action={onSubmit} className="flex flex-col gap-3">
         {mode === 'sign-up' && (
