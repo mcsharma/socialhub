@@ -6,16 +6,22 @@ export { prisma } from './client'
 export type {
   Circle,
   Comment,
+  FeedbackTarget,
   Media,
   Post,
-  PostReaction,
+  Reaction,
   User,
 } from './__generated__/prisma/client'
-export { MediaKind, ReactionType } from './__generated__/prisma/enums'
+export {
+  FeedbackTargetType,
+  MediaKind,
+  ReactionType,
+} from './__generated__/prisma/enums'
 export * from './ids'
 export * from './queries/circles'
 export * from './queries/comments'
 export * from './queries/media'
 export * from './queries/posts'
 export * from './queries/reactions'
+export * from './queries/targets'
 export * from './queries/users'

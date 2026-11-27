@@ -8,6 +8,8 @@
 // Two circles so circle privacy can be checked: neither sees the other.
 import { hashPassword } from 'better-auth/crypto'
 import { prisma } from '../src/client'
+import { createComment } from '../src/queries/comments'
+import { createPost } from '../src/queries/posts'
 import type { ReactionType } from '../src/__generated__/prisma/enums'
 
 const DEMO_PASSWORD = 'password123'
@@ -55,21 +57,23 @@ const COMMENT_BODIES = [
   'Congrats!!',
 ]
 
+const REPLY_BODIES = ['Thanks!', 'Haha, right?', 'Next time for sure.']
+
 const REACTIONS: ReactionType[] = ['LIKE', 'LOVE', 'HAHA', 'SAD', 'ANGRY']
 
 async function main() {
   const emails = CIRCLES.flatMap((c) => c.members.map((m) => m.email))
 
-  // Deleting a circle cascades to its members and posts (and their media
-  // links, reactions and comments); deleting a user cascades to sessions,
-  // accounts and everything they authored.
+  // Deleting a circle cascades to its members, posts and feedback targets
+  // (and so every reaction and comment in it); deleting a user cascades to
+  // sessions, accounts and everything they authored.
   await prisma.circle.deleteMany({
     where: { members: { some: { user: { email: { in: emails } } } } },
   })
   await prisma.user.deleteMany({ where: { email: { in: emails } } })
 
   const password = await hashPassword(DEMO_PASSWORD)
-  const totals = { users: 0, posts: 0, reactions: 0, comments: 0 }
+  const totals = { users: 0, posts: 0, reactions: 0, comments: 0, replies: 0 }
 
   for (const c of CIRCLES) {
     const users = []
@@ -104,44 +108,63 @@ async function main() {
     })
 
     // Insert sequentially, oldest first: Snowflake IDs encode insert time,
-    // so the feed's ORDER BY id DESC shows the last body first.
+    // so the feed's ORDER BY id DESC shows the last body first. Posts and
+    // comments are created through @socialhub/db's helpers so each gets its
+    // feedback target. Counts are filled in by database triggers.
     for (let i = 0; i < c.postCount; i++) {
       const author = users[i % users.length]!
-      const post = await prisma.post.create({
-        data: {
-          circleId: circle.id,
-          authorId: author.id,
-          body: `${POST_BODIES[i % POST_BODIES.length]} (#${i + 1})`,
-        },
+      const post = await createPost({
+        authorId: author.id,
+        circleId: circle.id,
+        body: `${POST_BODIES[i % POST_BODIES.length]} (#${i + 1})`,
+        mediaIds: [],
       })
 
-      // Varied reactions from other members. Counts on the post are filled
-      // in by the database triggers, not here.
+      // Varied reactions from other members.
       const reactions = users
         .filter((u, j) => u.id !== author.id && (i + j) % 3 !== 0)
         .map((u, j) => ({
-          postId: post.id,
+          targetId: post!.targetId,
           userId: u.id,
           type: REACTIONS[(i + j) % REACTIONS.length]!,
         }))
       if (reactions.length) {
-        await prisma.postReaction.createMany({ data: reactions })
+        await prisma.reaction.createMany({ data: reactions })
       }
+      totals.reactions += reactions.length
 
       if (i % 3 === 0) {
         const commenters = users.filter((u) => u.id !== author.id)
         for (const [j, u] of commenters.entries()) {
-          await prisma.comment.create({
-            data: {
-              postId: post.id,
-              authorId: u.id,
-              body: COMMENT_BODIES[(i + j) % COMMENT_BODIES.length]!,
-            },
+          const comment = await createComment({
+            parentTargetId: post!.targetId,
+            circleId: circle.id,
+            authorId: u.id,
+            body: COMMENT_BODIES[(i + j) % COMMENT_BODIES.length]!,
           })
           totals.comments++
+
+          // On every other commented post: the post's author reacts to the
+          // first comment and replies to it.
+          if (j === 0 && i % 2 === 0) {
+            await prisma.reaction.create({
+              data: {
+                targetId: comment.targetId,
+                userId: author.id,
+                type: 'LOVE',
+              },
+            })
+            totals.reactions++
+            await createComment({
+              parentTargetId: comment.targetId,
+              circleId: circle.id,
+              authorId: author.id,
+              body: REPLY_BODIES[i % REPLY_BODIES.length]!,
+            })
+            totals.replies++
+          }
         }
       }
-      totals.reactions += reactions.length
     }
     totals.users += users.length
     totals.posts += c.postCount
@@ -149,7 +172,7 @@ async function main() {
 
   console.log(
     `Seeded ${CIRCLES.length} circles, ${totals.users} users, ${totals.posts} posts, ` +
-      `${totals.reactions} reactions, ${totals.comments} comments. ` +
+      `${totals.reactions} reactions, ${totals.comments} comments, ${totals.replies} replies. ` +
       `Password for all: ${DEMO_PASSWORD}`,
   )
 }

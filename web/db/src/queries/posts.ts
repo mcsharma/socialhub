@@ -5,6 +5,7 @@ import { prisma } from '../client'
 // DAL), which must check circle membership before calling.
 
 const postInclude = {
+  target: { select: { reactionCount: true, commentCount: true } },
   author: { select: { id: true, name: true, username: true, image: true } },
   media: {
     orderBy: { position: 'asc' },
@@ -43,22 +44,6 @@ export async function listCirclePosts({
   return { posts, nextCursor: hasMore ? posts[posts.length - 1]!.id : null }
 }
 
-/** The circle a post belongs to, for permission checks. */
-export async function findPostCircleId(postId: bigint) {
-  const post = await prisma.post.findUnique({
-    where: { id: postId },
-    select: { circleId: true },
-  })
-  return post?.circleId ?? null
-}
-
-export async function getPostCounts(postId: bigint) {
-  return prisma.post.findUnique({
-    where: { id: postId },
-    select: { reactionCount: true, commentCount: true },
-  })
-}
-
 /**
  * Creates a post and attaches the given media, in order. Every media item
  * must have been uploaded by the author and not yet be attached to a post;
@@ -85,15 +70,18 @@ export async function createPost({
       }
     }
     return tx.post.create({
+      // Relations via connect/create: Prisma doesn't allow raw foreign-key
+      // IDs alongside a nested create.
       data: {
-        authorId,
-        circleId,
+        author: { connect: { id: authorId } },
+        circle: { connect: { id: circleId } },
         body,
+        target: { create: { targetType: 'POST', circleId } },
         media: {
           create: mediaIds.map((mediaId, position) => ({ mediaId, position })),
         },
       },
-      select: { id: true },
+      select: { id: true, targetId: true },
     })
   })
 }
