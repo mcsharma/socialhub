@@ -1,11 +1,7 @@
 import 'server-only'
 import {
-  findPostCircleId,
-  getPostCounts,
   listCirclePosts,
-  listPostComments,
-  summarizePostReactions,
-  type CommentRow,
+  summarizeReactions,
   type PostRow,
   type ReactionSummary,
 } from '@socialhub/db'
@@ -13,16 +9,9 @@ import { photoObjectKey } from '@/lib/photos'
 import { signedGetUrl } from '@/lib/storage'
 import { isViewerInCircle } from './circles'
 import { getViewer } from './session'
-import type {
-  CommentDTO,
-  PhotoDTO,
-  PostDTO,
-  PostPageDTO,
-  ReactionStateDTO,
-} from './dto'
+import type { PhotoDTO, PostDTO, PostPageDTO } from './dto'
 
 export const FEED_PAGE_SIZE = 10
-const COMMENTS_LIMIT = 200
 
 /**
  * One page of a circle's feed, or null if the viewer isn't a member (or is
@@ -42,58 +31,15 @@ export async function getCircleFeedPage(
     cursor,
     limit: FEED_PAGE_SIZE,
   })
-  const reactions = await summarizePostReactions({
-    postIds: page.posts.map((p) => p.id),
+  const reactions = await summarizeReactions({
+    targetIds: page.posts.map((p) => p.targetId),
     viewerId: viewer.id,
   })
   return {
     posts: await Promise.all(
-      page.posts.map((p) => toPostDTO(p, reactions.get(p.id)!)),
+      page.posts.map((p) => toPostDTO(p, reactions.get(p.targetId)!)),
     ),
     nextCursor: page.nextCursor?.toString() ?? null,
-  }
-}
-
-/**
- * Whether the viewer may see (and so react to or comment on) a post: true
- * only for members of the post's circle.
- */
-export async function canViewerAccessPost(postId: bigint): Promise<boolean> {
-  const circleId = await findPostCircleId(postId)
-  return circleId !== null && (await isViewerInCircle(circleId))
-}
-
-export async function getPostComments(
-  postId: bigint,
-): Promise<CommentDTO[] | null> {
-  if (!(await canViewerAccessPost(postId))) return null
-  const comments = await listPostComments({ postId, limit: COMMENTS_LIMIT })
-  return comments.map(toCommentDTO)
-}
-
-/** Fresh reaction state for one post, after the viewer reacted. */
-export async function getReactionState(
-  postId: bigint,
-  viewerId: string,
-): Promise<ReactionStateDTO> {
-  const [counts, summaries] = await Promise.all([
-    getPostCounts(postId),
-    summarizePostReactions({ postIds: [postId], viewerId }),
-  ])
-  const summary = summaries.get(postId)!
-  return {
-    reactionCount: counts?.reactionCount ?? 0,
-    topReactions: summary.topTypes,
-    viewerReaction: summary.viewerType,
-  }
-}
-
-export function toCommentDTO(comment: CommentRow): CommentDTO {
-  return {
-    id: comment.id.toString(),
-    body: comment.body,
-    createdAt: comment.createdAt.toISOString(),
-    author: comment.author,
   }
 }
 
@@ -122,12 +68,13 @@ async function toPostDTO(
 ): Promise<PostDTO> {
   return {
     id: post.id.toString(),
+    targetId: post.targetId.toString(),
     body: post.body,
     createdAt: post.createdAt.toISOString(),
     author: post.author,
     photos: await Promise.all(post.media.map((m) => toPhotoDTO(m.media))),
-    reactionCount: post.reactionCount,
-    commentCount: post.commentCount,
+    reactionCount: post.target.reactionCount,
+    commentCount: post.target.commentCount,
     topReactions: reactions.topTypes,
     viewerReaction: reactions.viewerType,
   }

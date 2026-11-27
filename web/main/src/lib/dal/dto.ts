@@ -45,10 +45,13 @@ export type ReactionStateDTO = {
 
 export type PostDTO = ReactionStateDTO & {
   id: string
+  /** The post's feedback target: what its reactions and comments attach to. */
+  targetId: string
   body: string | null
   createdAt: string
   author: UserSummaryDTO
   photos: PhotoDTO[]
+  /** Comments directly on the post (replies not included). */
   commentCount: number
 }
 
@@ -57,9 +60,14 @@ export type PostPageDTO = {
   nextCursor: string | null
 }
 
-export type CommentDTO = {
+export type CommentDTO = ReactionStateDTO & {
   id: string
+  /** The comment's own feedback target: its reactions and replies. */
+  targetId: string
   body: string
   createdAt: string
   author: UserSummaryDTO
+  replyCount: number
+  /** Whether it can be replied to (only comments on posts: two levels). */
+  canReply: boolean
 }
