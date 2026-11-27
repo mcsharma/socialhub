@@ -45,7 +45,7 @@ model User {
   membersAdded      CircleMember[] @relation("CircleMemberAddedBy")
   posts             Post[]
   media             Media[]
-  postReactions     PostReaction[]
+  reactions         Reaction[]
   comments          Comment[]
 
   @@map("users")
@@ -118,8 +118,9 @@ model Circle {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  members CircleMember[]
-  posts   Post[]
+  members         CircleMember[]
+  posts           Post[]
+  feedbackTargets FeedbackTarget[]
 
   @@map("circles")
 }
@@ -140,29 +141,72 @@ model CircleMember {
   @@map("circle_members")
 }
 
+// ─── Feedback targets ─────────────────────────────────────────────────────
+// Anything people can react to or comment on (posts, comments; later photos,
+// polls, …) owns one feedback target. Reactions and comments attach to the
+// target, never to posts or comments directly, so they're implemented once
+// and work on every type.
+//
+// - Each owning table has its own ID plus a unique `target_id` pointing here.
+//   Adding a type = a `target_id` column on its table, a `FeedbackTargetType`
+//   value, and one `owner…` back-relation line below (Prisma-only, no column).
+// - `circle_id` makes permission checks one lookup for every type: you can see
+//   a target iff you're in its circle.
+// - Counts are maintained by Postgres triggers (see the feedback_targets
+//   migration) — never written by app code.
+// - Deleting a post or comment deletes its target (trigger), which cascades
+//   to its reactions and the comments on it.
+// - In code, use findFeedbackTarget() (web/db), which returns a typed `owner`
+//   union instead of the per-type owner relations.
+
+enum FeedbackTargetType {
+  POST
+  COMMENT
+
+  @@map("feedback_target_type")
+}
+
+model FeedbackTarget {
+  id            BigInt             @id @default(dbgenerated("next_id()"))
+  targetType    FeedbackTargetType @map("target_type")
+  circleId      BigInt             @map("circle_id")
+  reactionCount Int                @default(0) @map("reaction_count")
+  // Direct comments only (for a post: top-level comments, not replies).
+  commentCount  Int                @default(0) @map("comment_count")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  circle        Circle             @relation(fields: [circleId], references: [id], onDelete: Cascade)
+
+  // The object this target belongs to — exactly one is set, per targetType.
+  ownerPost    Post?    @relation("TargetOwner")
+  ownerComment Comment? @relation("TargetOwner")
+
+  // Feedback left on it.
+  comments  Comment[]  @relation("CommentsOnTarget")
+  reactions Reaction[]
+
+  @@map("feedback_targets")
+}
+
 // ─── Posts ────────────────────────────────────────────────────────────────
 
 model Post {
   // Snowflake IDs are time-ordered, so `ORDER BY id DESC` is newest-first
   // and `WHERE id < :cursor` is keyset pagination — no created_at index
   // needed for the feed.
-  id            BigInt   @id @default(dbgenerated("next_id()"))
-  circleId      BigInt   @map("circle_id")
-  authorId      String   @map("author_id")
+  id        BigInt         @id @default(dbgenerated("next_id()"))
+  circleId  BigInt         @map("circle_id")
+  authorId  String         @map("author_id")
+  // This post's feedback target (its reactions and comments).
+  targetId  BigInt         @unique @map("target_id")
   // Null for photo-only posts. The app requires a body or at least one photo.
-  body          String?
-  // Denormalized counts, maintained by Postgres triggers on post_reactions
-  // and comments (see the circles migration) — never written by app code.
-  reactionCount Int      @default(0) @map("reaction_count")
-  commentCount  Int      @default(0) @map("comment_count")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  circle        Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
-  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String?
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  circle    Circle         @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  target    FeedbackTarget @relation("TargetOwner", fields: [targetId], references: [id], onDelete: Cascade)
 
-  media     PostMedia[]
-  reactions PostReaction[]
-  comments  Comment[]
+  media PostMedia[]
 
   @@index([circleId, id(sort: Desc)]) // circle feed
   @@index([authorId, id(sort: Desc)]) // profile
@@ -214,9 +258,6 @@ model PostMedia {
 }
 
 // ─── Reactions ────────────────────────────────────────────────────────────
-// One table per reactable thing (post_reactions now, comment_reactions
-// later), sharing ReactionType — keeps real foreign keys and cascades, which
-// a polymorphic (target_type, target_id) table can't.
 
 enum ReactionType {
   LIKE
@@ -228,35 +269,42 @@ enum ReactionType {
   @@map("reaction_type")
 }
 
-model PostReaction {
-  postId    BigInt       @map("post_id")
-  userId    String       @map("user_id")
+model Reaction {
+  targetId  BigInt         @map("target_id")
+  userId    String         @map("user_id")
   type      ReactionType
-  createdAt DateTime     @default(now()) @map("created_at")
-  updatedAt DateTime     @updatedAt @map("updated_at")
-  post      Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+  target    FeedbackTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // One reaction per person per post; changing it updates `type`.
-  @@id([postId, userId])
+  // One reaction per person per target; changing it updates `type`.
+  @@id([targetId, userId])
   @@index([userId])
-  @@map("post_reactions")
+  @@map("reactions")
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────
-// Flat for now. Replies will add a nullable `parentId`.
+// A comment is left on a feedback target (a post's, or another comment's
+// for a reply) and owns a target of its own, so it can be reacted to and
+// replied to. The app allows two levels: comments on posts, and replies to
+// those comments.
 
 model Comment {
-  id        BigInt   @id @default(dbgenerated("next_id()"))
-  postId    BigInt   @map("post_id")
-  authorId  String   @map("author_id")
-  body      String
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  id             BigInt         @id @default(dbgenerated("next_id()"))
+  // This comment's own feedback target (its reactions and replies).
+  targetId       BigInt         @unique @map("target_id")
+  // The target it was left on.
+  parentTargetId BigInt         @map("parent_target_id")
+  authorId       String         @map("author_id")
+  body           String
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  target         FeedbackTarget @relation("TargetOwner", fields: [targetId], references: [id], onDelete: Cascade)
+  parentTarget   FeedbackTarget @relation("CommentsOnTarget", fields: [parentTargetId], references: [id], onDelete: Cascade)
+  author         User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
-  @@index([postId, id]) // a post's comments, oldest first
+  @@index([parentTargetId, id]) // comments on a target, oldest first
   @@index([authorId])
   @@map("comments")
 }
