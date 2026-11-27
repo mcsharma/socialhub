@@ -157,14 +157,28 @@ Tables are documented in `web/db/prisma/schema.prisma`. The main rules:
   allows many; the app enforces one for now.
 - **All members are equal.** Any member can add someone; `added_by_id`
   records who did.
-- **Counts are maintained by Postgres triggers.** `posts.reaction_count` and
-  `posts.comment_count` are updated by triggers on `post_reactions` and
-  `comments` (in the `circles_reactions_comments` migration). App code never
-  writes them.
+- **Reactions and comments attach to feedback targets**, not to posts or
+  comments directly. Anything people can react to or comment on owns one
+  `feedback_targets` row (posts and comments today) through a unique
+  `target_id` column. A comment is left on a target (`parent_target_id`) and
+  owns one too, which is how comments get reactions and replies. Replies go
+  two levels deep (comments on posts, replies to those), an app rule.
+- **Adding a reactable/commentable type** (photos, polls, …): give its table a
+  `target_id` column, add a `FeedbackTargetType` value and an `owner…`
+  back-relation in `schema.prisma`, a case in `findFeedbackTarget()`
+  (`web/db/src/queries/targets.ts`), and attach the
+  `feedback_targets_delete_owned()` trigger to the new table. Reactions,
+  comments, permissions and the UI then work unchanged.
+- **Permissions for feedback** are one rule for every type: a target's
+  `circle_id` says who can see it (`getAccessibleTarget()` in
+  `web/main/src/lib/dal/feedback.ts`).
+- **Counts are maintained by Postgres triggers** on `reactions` and
+  `comments`: `feedback_targets.reaction_count` and `comment_count` (direct
+  comments only, so a post's count excludes replies). Deleting a post or
+  comment deletes its target, which cascades to its reactions and the
+  comments on it. App code never writes counts.
 - **Photos**: up to 10 per post. See "Photos and storage" below.
-- **Extending later:** reactions on comments get their own
-  `comment_reactions` table with the same `ReactionType`; replies add a
-  nullable `parent_id` to `comments`; videos add a `MediaKind`.
+- **Extending later:** videos add a `MediaKind`.
 
 ## App structure
 
@@ -175,17 +189,22 @@ Tables are documented in `web/db/prisma/schema.prisma`. The main rules:
 | `/c/[circleId]/members` | Members list + add someone by username or email |
 | `/login` | Email/password and Google sign-in |
 | `GET /api/circles/[circleId]/posts?cursor=` | Feed pages for SWR "Load more" |
-| `GET /api/posts/[postId]/comments` | A post's comments, loaded when opened |
+| `GET /api/feedback/[targetId]/comments` | Comments on any target (a post's comments, a comment's replies), loaded when opened |
 | `POST /api/media` | Upload one photo (multipart `file`) |
 
 - **Writes** are Server Actions in `web/main/src/lib/actions/`: create
-  circle, add member, create post, set/remove reaction, add comment. Each
-  re-checks the session and circle membership.
-- **Reads** go through `web/main/src/lib/dal/` (`circles.ts`, `posts.ts`),
+  circle, add member, create post, set/remove reaction and add comment (both
+  take any feedback target). Each re-checks the session and circle
+  membership.
+- **Reads** go through `web/main/src/lib/dal/` (`circles.ts`, `posts.ts`,
+  `feedback.ts`),
   which check membership and return DTOs (`dto.ts`).
 - **Feed updates in the browser:** a new post revalidates the feed through
-  SWR; reactions and comments patch just that post in SWR's cache. Reactions
-  update instantly (`useOptimistic`) and are corrected by the server's answer.
+  SWR; reactions and comments patch just that post (or comment) in SWR's
+  cache. Reactions update instantly (`useOptimistic`) and are corrected by the
+  server's answer. `components/feedback/` holds the shared pieces —
+  `useReaction`, `ReactionPicker`, and `Comments` (which nests itself for
+  replies) — used for posts and comments alike.
 
 ## Photos and storage
 
