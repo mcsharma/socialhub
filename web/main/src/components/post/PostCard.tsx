@@ -6,7 +6,7 @@ import { formatDateTime } from '@/lib/format'
 import { UserAvatar } from '@/components/UserAvatar'
 import { PostPhotos } from './PostPhotos'
 import { ReactionBar } from './ReactionBar'
-import { CommentsSection } from './CommentsSection'
+import { Comments } from '@/components/feedback/Comments'
 
 export function PostCard({
   post,
@@ -40,7 +40,7 @@ export function PostCard({
       <PostPhotos photos={post.photos} />
 
       <ReactionBar
-        postId={post.id}
+        targetId={post.targetId}
         state={post}
         onChange={(state) => onUpdate(post.id, state)}
         commentCount={post.commentCount}
@@ -48,10 +48,14 @@ export function PostCard({
         onToggleComments={() => setCommentsOpen((open) => !open)}
       />
       {commentsOpen && (
-        <CommentsSection
-          postId={post.id}
-          onCountChange={(count) => onUpdate(post.id, { commentCount: count })}
-        />
+        <div className="border-t border-border pt-3">
+          <Comments
+            targetId={post.targetId}
+            onCountChange={(count) =>
+              onUpdate(post.id, { commentCount: count })
+            }
+          />
+        </div>
       )}
     </article>
   )
